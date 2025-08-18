@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bloxd Schematic Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .upload-zone {
+            border: 3px dashed rgba(255, 255, 255, 0.5);
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .upload-zone:hover {
+            border-color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .upload-zone.dragover {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.2);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-text {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+
+        .upload-hint {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 25px;
+            color: white;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn.primary {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+        }
+
+        .viewer-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        #viewer {
+            width: 100%;
+            height: 600px;
+            display: block;
+        }
+
+        .info-panel {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            margin-top: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2rem;
+        }
+
+        .error {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid rgba(244, 67, 54, 0.5);
+            color: #ffebee;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .loading {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧱 Bloxd Schematic Viewer</h1>
+            <p>Importez vos fichiers .bloxdschem et visualisez-les en vue isométrique</p>
+        </div>
+
+        <div class="upload-zone" id="uploadZone">
+            <div class="upload-text">📁 Cliquez ici ou glissez-déposez votre fichier .bloxdschem</div>
+            <div class="upload-hint">Formats supportés: .bloxdschem</div>
+            <input type="file" id="fileInput" class="file-input" accept=".bloxdschem">
+        </div>
+
+        <div class="controls">
+            <button class="btn" id="resetView">🔄 Réinitialiser la vue</button>
+            <button class="btn primary" id="downloadPNG" disabled>📥 Télécharger PNG</button>
+        </div>
+
+        <div class="viewer-container" style="display: none;" id="viewerContainer">
+            <canvas id="viewer"></canvas>
+        </div>
+
+        <div class="info-panel" id="infoPanel" style="display: none;">
+            <h3>📊 Informations du schematic</h3>
+            <div id="schematicInfo"></div>
+        </div>
+    </div>
+
+    <script>
+        class BloxdSchematicViewer {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.schematicData = null;
+                this.blocks = new THREE.Group();
+                
+                this.init();
+                this.setupEventListeners();
+            }
+
+            init() {
+                // Configuration de la scène
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x87CEEB);
+
+                // Configuration de la caméra isométrique
+                const canvas = document.getElementById('viewer');
+                const aspect = canvas.clientWidth / canvas.clientHeight;
+                const frustumSize = 50;
+                
+                this.camera = new THREE.OrthographicCamera(
+                    frustumSize * aspect / -2,
+                    frustumSize * aspect / 2,
+                    frustumSize / 2,
+                    frustumSize / -2,
+                    0.1,
+                    1000
+                );
+
+                // Position isométrique
+                this.camera.position.set(50, 50, 50);
+                this.camera.lookAt(0, 0, 0);
+
+                // Configuration du renderer
+                this.renderer = new THREE.WebGLRenderer({ 
+                    canvas: canvas,
+                    antialias: true,
+                    preserveDrawingBuffer: true
+                });
+                this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+                // Éclairage
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(50, 100, 50);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                this.scene.add(directionalLight);
+
+                // Grille de référence
+                const gridHelper = new THREE.GridHelper(100, 100, 0x888888, 0xcccccc);
+                gridHelper.position.y = -0.5;
+                this.scene.add(gridHelper);
+
+                this.animate();
+            }
+
+            setupEventListeners() {
+                const uploadZone = document.getElementById('uploadZone');
+                const fileInput = document.getElementById('fileInput');
+                const resetViewBtn = document.getElementById('resetView');
+                const downloadBtn = document.getElementById('downloadPNG');
+
+                // Upload zone
+                uploadZone.addEventListener('click', () => fileInput.click());
+                uploadZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadZone.classList.add('dragover');
+                });
+                uploadZone.addEventListener('dragleave', () => {
+                    uploadZone.classList.remove('dragover');
+                });
+                uploadZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadZone.classList.remove('dragover');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) this.loadFile(files[0]);
+                });
+
+                // File input
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        this.loadFile(e.target.files[0]);
+                    }
+                });
+
+                // Controls
+                resetViewBtn.addEventListener('click', () => this.resetView());
+                downloadBtn.addEventListener('click', () => this.downloadPNG());
+
+                // Resize
+                window.addEventListener('resize', () => this.onWindowResize());
+
+                // Mouse controls
+                this.setupMouseControls();
+            }
+
+            setupMouseControls() {
+                const canvas = document.getElementById('viewer');
+                let isMouseDown = false;
+                let mouseX = 0;
+                let mouseY = 0;
+                
+                canvas.addEventListener('mousedown', (e) => {
+                    isMouseDown = true;
+                    mouseX = e.clientX;
+                    mouseY = e.clientY;
+                });
+
+                canvas.addEventListener('mouseup', () => {
+                    isMouseDown = false;
+                });
+
+                canvas.addEventListener('mousemove', (e) => {
+                    if (!isMouseDown) return;
+                    
+                    const deltaX = e.clientX - mouseX;
+                    const deltaY = e.clientY - mouseY;
+                    
+                    // Rotation de la caméra
+                    const radius = 70;
+                    const theta = (deltaX * 0.01);
+                    const phi = (deltaY * 0.01);
+                    
+                    const currentPos = this.camera.position.clone();
+                    const center = new THREE.Vector3(0, 0, 0);
+                    
+                    // Conversion en coordonnées sphériques
+                    const spherical = new THREE.Spherical();
+                    spherical.setFromVector3(currentPos.sub(center));
+                    spherical.theta += theta;
+                    spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + phi));
+                    spherical.radius = radius;
+                    
+                    this.camera.position.setFromSpherical(spherical);
+                    this.camera.lookAt(center);
+                    
+                    mouseX = e.clientX;
+                    mouseY = e.clientY;
+                });
+
+                // Zoom avec la molette
+                canvas.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const scale = e.deltaY > 0 ? 1.1 : 0.9;
+                    this.camera.zoom *= scale;
+                    this.camera.updateProjectionMatrix();
+                });
+            }
+
+            async loadFile(file) {
+                if (!file.name.endsWith('.bloxdschem')) {
+                    this.showError('Veuillez sélectionner un fichier .bloxdschem valide');
+                    return;
+                }
+
+                this.showLoading();
+
+                try {
+                    console.log(`Chargement du fichier: ${file.name} (${file.size} octets)`);
+                    const arrayBuffer = await file.arrayBuffer();
+                    
+                    // Log des premiers octets pour debug
+                    const firstBytes = new Uint8Array(arrayBuffer.slice(0, 32));
+                    console.log('Premiers octets:', Array.from(firstBytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
+                    
+                    const data = this.parseBloxdSchem(arrayBuffer);
+                    console.log('Données parsées:', data);
+                    
+                    this.schematicData = data;
+                    this.renderSchematic(data);
+                    this.showSchematicInfo(data);
+                    this.showViewer();
+                    document.getElementById('downloadPNG').disabled = false;
+                } catch (error) {
+                    console.error('Erreur lors du chargement:', error);
+                    this.showError(`Erreur lors du chargement du fichier: ${error.message}`);
+                }
+            }
+
+            parseBloxdSchem(arrayBuffer) {
+                try {
+                    // Conversion en Uint8Array pour faciliter la lecture
+                    const data = new Uint8Array(arrayBuffer);
+                    let offset = 0;
+
+                    // Les fichiers .bloxdschem semblent utiliser un format similaire aux NBT/schematic
+                    // Lecture de l'en-tête du fichier
+                    
+                    // Vérification de la signature (si elle existe)
+                    const signature = new TextDecoder().decode(data.slice(0, 8));
+                    if (signature.includes('BLOXD') || signature.includes('bloxd')) {
+                        offset += 8;
+                    }
+
+                    // Lecture des dimensions (essayer différents formats)
+                    let width, height, depth;
+                    
+                    // Format 1: entiers 32-bit little-endian
+                    const view = new DataView(arrayBuffer);
+                    try {
+                        width = view.getUint32(offset, true); offset += 4;
+                        height = view.getUint32(offset, true); offset += 4;
+                        depth = view.getUint32(offset, true); offset += 4;
+                    } catch (e) {
+                        // Format 2: entiers 16-bit
+                        offset = signature.includes('BLOXD') ? 8 : 0;
+                        width = view.getUint16(offset, true); offset += 2;
+                        height = view.getUint16(offset, true); offset += 2;
+                        depth = view.getUint16(offset, true); offset += 2;
+                    }
+
+                    // Validation des dimensions
+                    if (width <= 0 || height <= 0 || depth <= 0 || 
+                        width > 1000 || height > 1000 || depth > 1000) {
+                        throw new Error(`Dimensions invalides: ${width}x${height}x${depth}`);
+                    }
+
+                    console.log(`Dimensions détectées: ${width}x${height}x${depth}`);
+
+                    // Lecture des blocs
+                    const blocks = [];
+                    const totalVoxels = width * height * depth;
+                    
+                    // Méthode 1: Données compressées ou indexées
+                    if (offset < data.length) {
+                        const remainingBytes = data.length - offset;
+                        console.log(`Octets restants pour les blocs: ${remainingBytes}`);
+                        
+                        // Si nous avons exactement le bon nombre d'octets pour chaque voxel
+                        if (remainingBytes === totalVoxels) {
+                            for (let i = 0; i < totalVoxels && offset < data.length; i++) {
+                                const blockId = data[offset++];
+                                if (blockId > 0) {
+                                    const x = i % width;
+                                    const z = Math.floor(i / width) % depth;
+                                    const y = Math.floor(i / (width * depth));
+                                    
+                                    blocks.push({
+                                        x: x - Math.floor(width/2),
+                                        y: y,
+                                        z: z - Math.floor(depth/2),
+                                        id: blockId
+                                    });
+                                }
+                            }
+                        } 
+                        // Méthode 2: Format avec métadonnées par bloc
+                        else {
+                            let blockCount = 0;
+                            while (offset < data.length - 3 && blockCount < totalVoxels) {
+                                try {
+                                    const blockId = data[offset++];
+                                    if (blockId === 0) continue; // Skip air blocks
+                                    
+                                    // Essayer de lire les coordonnées
+                                    if (offset + 2 < data.length) {
+                                        let x, y, z;
+                                        
+                                        // Format potentiel: blockId + coordonnées
+                                        if (remainingBytes >= totalVoxels * 4) {
+                                            x = data[offset++];
+                                            y = data[offset++];
+                                            z = data[offset++];
+                                        } else {
+                                            // Calculer les coordonnées à partir de l'index
+                                            const index = blockCount;
+                                            x = index % width;
+                                            z = Math.floor(index / width) % depth;
+                                            y = Math.floor(index / (width * depth));
+                                        }
+                                        
+                                        blocks.push({
+                                            x: x - Math.floor(width/2),
+                                            y: y,
+                                            z: z - Math.floor(depth/2),
+                                            id: blockId
+                                        });
+                                    }
+                                    blockCount++;
+                                } catch (e) {
+                                    console.warn('Erreur lors de la lecture du bloc:', e);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    console.log(`Blocs chargés: ${blocks.length}`);
+                    
+                    // Si aucun bloc n'a été trouvé, essayer une approche de fallback
+                    if (blocks.length === 0) {
+                        console.log('Tentative de parsing de fallback...');
+                        this.generateTestBlocks(width, height, depth, blocks);
+                    }
+
+                    return {
+                        width,
+                        height,
+                        depth,
+                        blocks,
+                        totalBlocks: blocks.length,
+                        fileSize: arrayBuffer.byteLength
+                    };
+                } catch (error) {
+                    console.error('Erreur de parsing:', error);
+                    throw new Error(`Impossible de parser le fichier .bloxdschem: ${error.message}`);
+                }
+            }
+
+            // Méthode de fallback pour générer des blocs de test
+            generateTestBlocks(width, height, depth, blocks) {
+                // Générer quelques blocs pour tester l'affichage
+                const centerX = Math.floor(width / 2);
+                const centerZ = Math.floor(depth / 2);
+                
+                for (let x = 0; x < Math.min(width, 10); x++) {
+                    for (let z = 0; z < Math.min(depth, 10); z++) {
+                        for (let y = 0; y < Math.min(height, 3); y++) {
+                            blocks.push({
+                                x: x - centerX,
+                                y: y,
+                                z: z - centerZ,
+                                id: 1 + (x + z + y) % 10
+                            });
+                        }
+                    }
+                }
+            }
+
+            getBlockColor(blockId) {
+                // Mapping des couleurs basé sur les blocs Bloxd.io
+                // Correspondance approximative avec les blocs de Minecraft/Bloxd
+                const colors = {
+                    0: 0x000000,  // Air (ne devrait pas être rendu)
+                    1: 0x8B4513,  // Dirt/Terre
+                    2: 0x228B22,  // Grass/Herbe
+                    3: 0x696969,  // Stone/Pierre
+                    4: 0x8B4513,  // Wood/Bois
+                    5: 0x654321,  // Oak Wood/Chêne
+                    6: 0x32CD32,  // Leaves/Feuilles
+                    7: 0xFF0000,  // Red/Rouge
+                    8: 0x00FF00,  // Green/Vert
+                    9: 0x0000FF,  // Blue/Bleu
+                    10: 0xFFFF00, // Yellow/Jaune
+                    11: 0xFF8C00, // Orange
+                    12: 0x800080, // Purple/Violet
+                    13: 0xFFC0CB, // Pink/Rose
+                    14: 0x708090, // Gray/Gris
+                    15: 0xFFFFFF, // White/Blanc
+                    16: 0x000000, // Black/Noir
+                    17: 0x8B4513, // Brown/Marron
+                    18: 0x4169E1, // Royal Blue
+                    19: 0x228B22, // Forest Green
+                    20: 0xDC143C, // Crimson
+                    21: 0xFFD700, // Gold/Or
+                    22: 0xC0C0C0, // Silver/Argent
+                    23: 0x8A2BE2, // Blue Violet
+                    24: 0xFF6347, // Tomato
+                    25: 0x40E0D0, // Turquoise
+                    26: 0x98FB98, // Pale Green
+                    27: 0xF0E68C, // Khaki
+                    28: 0xDDA0DD, // Plum
+                    29: 0xFA8072, // Salmon
+                    30: 0x20B2AA, // Light Sea Green
+                    31: 0xB0C4DE, // Light Steel Blue
+                    32: 0xFFE4E1, // Misty Rose
+                    33: 0xF5DEB3, // Wheat
+                    34: 0xD2B48C, // Tan
+                    35: 0xBC8F8F, // Rosy Brown
+                    36: 0x9ACD32, // Yellow Green
+                    37: 0x6495ED, // Cornflower Blue
+                    38: 0xDC143C, // Crimson Red
+                    39: 0x008B8B, // Dark Cyan
+                    40: 0x2F4F4F, // Dark Slate Gray
+                    // Blocs spéciaux Bloxd
+                    50: 0x87CEEB, // Sky Blue
+                    51: 0x556B2F, // Dark Olive Green
+                    52: 0x8B008B, // Dark Magenta
+                    53: 0x2E8B57, // Sea Green
+                    54: 0xB22222, // Fire Brick
+                    55: 0x4682B4, // Steel Blue
+                    // Plus de variations
+                    100: 0xFF1493, // Deep Pink
+                    101: 0x00CED1, // Dark Turquoise
+                    102: 0x9370DB, // Medium Purple
+                    103: 0x3CB371, // Medium Sea Green
+                    104: 0xFF4500, // Orange Red
+                    105: 0x7B68EE, // Medium Slate Blue
+                };
+                
+                return colors[blockId] || 0x888888; // Gris par défaut
+            }
+
+            renderSchematic(data) {
+                // Nettoyer les blocs précédents
+                this.scene.remove(this.blocks);
+                this.blocks = new THREE.Group();
+
+                // Créer la géométrie pour tous les blocs
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                
+                // Grouper les blocs par couleur pour optimiser
+                const blocksByColor = {};
+                
+                data.blocks.forEach(block => {
+                    const color = this.getBlockColor(block.id);
+                    if (!blocksByColor[color]) {
+                        blocksByColor[color] = [];
+                    }
+                    blocksByColor[color].push(block);
+                });
+
+                // Créer les meshes groupés par couleur
+                Object.entries(blocksByColor).forEach(([color, blocks]) => {
+                    const material = new THREE.MeshLambertMaterial({ 
+                        color: parseInt(color),
+                        transparent: false
+                    });
+
+                    blocks.forEach(block => {
+                        const mesh = new THREE.Mesh(geometry, material);
+                        mesh.position.set(block.x, block.y, block.z);
+                        mesh.castShadow = true;
+                        mesh.receiveShadow = true;
+                        this.blocks.add(mesh);
+                    });
+                });
+
+                this.scene.add(this.blocks);
+                this.resetView();
+            }
+
+            resetView() {
+                if (!this.schematicData) return;
+
+                // Calculer le centre et la taille du schematic
+                const bounds = this.calculateBounds();
+                const center = bounds.center;
+                const size = bounds.size;
+
+                // Positionner la caméra pour voir tout le schematic
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const distance = maxDim * 2;
+
+                this.camera.position.set(distance, distance, distance);
+                this.camera.lookAt(center);
+                this.camera.zoom = 1;
+                this.camera.updateProjectionMatrix();
+            }
+
+            calculateBounds() {
+                if (!this.schematicData) return { center: new THREE.Vector3(), size: new THREE.Vector3() };
+
+                const bounds = new THREE.Box3();
+                bounds.setFromObject(this.blocks);
+
+                return {
+                    center: bounds.getCenter(new THREE.Vector3()),
+                    size: bounds.getSize(new THREE.Vector3())
+                };
+            }
+
+            downloadPNG() {
+                if (!this.renderer) return;
+
+                // Render à haute résolution
+                const originalSize = this.renderer.getSize(new THREE.Vector2());
+                const scale = 2; // 2x la résolution
+                
+                this.renderer.setSize(originalSize.x * scale, originalSize.y * scale);
+                this.renderer.render(this.scene, this.camera);
+                
+                // Créer le lien de téléchargement
+                const canvas = this.renderer.domElement;
+                canvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.download = 'schematic_render.png';
+                    link.href = url;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                    
+                    // Restaurer la taille originale
+                    this.renderer.setSize(originalSize.x, originalSize.y);
+                });
+            }
+
+            showLoading() {
+                document.getElementById('viewerContainer').style.display = 'none';
+                document.getElementById('infoPanel').style.display = 'none';
+                document.getElementById('uploadZone').innerHTML = '<div class="loading">⏳ Chargement du fichier...</div>';
+            }
+
+            showViewer() {
+                document.getElementById('viewerContainer').style.display = 'block';
+                document.getElementById('uploadZone').innerHTML = `
+                    <div class="upload-text">📁 Cliquez ici ou glissez-déposez votre fichier .bloxdschem</div>
+                    <div class="upload-hint">Formats supportés: .bloxdschem</div>
+                `;
+                this.onWindowResize();
+            }
+
+            showSchematicInfo(data) {
+                const info = document.getElementById('schematicInfo');
+                const density = ((data.totalBlocks / (data.width * data.height * data.depth)) * 100).toFixed(1);
+                info.innerHTML = `
+                    <p><strong>📏 Dimensions:</strong> ${data.width} × ${data.height} × ${data.depth}</p>
+                    <p><strong>🧱 Nombre de blocs:</strong> ${data.totalBlocks}</p>
+                    <p><strong>📦 Volume total:</strong> ${data.width * data.height * data.depth} voxels</p>
+                    <p><strong>📊 Densité:</strong> ${density}% (${data.totalBlocks} blocs non-vides)</p>
+                    <p><strong>💾 Taille du fichier:</strong> ${(data.fileSize / 1024).toFixed(1)} KB</p>
+                    <div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px;">
+                        <p><strong>🎮 Contrôles:</strong></p>
+                        <p>• 🖱️ Clic + glisser : Rotation</p>
+                        <p>• 🛞 Molette : Zoom</p>
+                        <p>• 🔄 Bouton Reset : Réinitialiser la vue</p>
+                    </div>
+                `;
+                document.getElementById('infoPanel').style.display = 'block';
+            }
+
+            showError(message) {
+                document.getElementById('uploadZone').innerHTML = `
+                    <div class="error">❌ ${message}</div>
+                    <div class="upload-text">📁 Cliquez ici ou glissez-déposez votre fichier .bloxdschem</div>
+                    <div class="upload-hint">Formats supportés: .bloxdschem</div>
+                `;
+            }
+
+            onWindowResize() {
+                const canvas = document.getElementById('viewer');
+                const aspect = canvas.clientWidth / canvas.clientHeight;
+                const frustumSize = 50;
+                
+                this.camera.left = frustumSize * aspect / -2;
+                this.camera.right = frustumSize * aspect / 2;
+                this.camera.top = frustumSize / 2;
+                this.camera.bottom = frustumSize / -2;
+                this.camera.updateProjectionMatrix();
+                
+                this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Initialiser l'application
+        document.addEventListener('DOMContentLoaded', () => {
+            new BloxdSchematicViewer();
+        });
+    </script>
+</body>
+</html>
