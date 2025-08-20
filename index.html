@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Extracteur d'Images depuis les Liens</title>
+    <title>Extracteur d'Images depuis Fichiers</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         * {
@@ -20,7 +20,7 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -40,89 +40,137 @@
             background-clip: text;
         }
 
-        .input-section {
+        .upload-section {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
             margin-bottom: 30px;
+            background: rgba(102, 126, 234, 0.05);
+            transition: all 0.3s ease;
         }
 
-        label {
-            display: block;
-            margin-bottom: 10px;
-            font-weight: 600;
+        .upload-section.dragover {
+            border-color: #764ba2;
+            background: rgba(118, 75, 162, 0.1);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            opacity: 0.7;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
             color: #333;
-            font-size: 1.1em;
+            margin-bottom: 20px;
         }
 
-        textarea {
-            width: 100%;
-            height: 150px;
-            padding: 15px;
-            border: 2px solid #e1e5e9;
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px 30px;
+            border: none;
             border-radius: 10px;
             font-size: 16px;
-            resize: vertical;
+            font-weight: 600;
+            cursor: pointer;
             transition: all 0.3s ease;
-            background: rgba(255, 255, 255, 0.8);
         }
 
-        textarea:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .file-list {
+            margin: 20px 0;
+            display: none;
+        }
+
+        .file-item {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .file-size {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .file-status {
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-processing {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
         }
 
         .analyze-btn {
             width: 100%;
-            padding: 15px;
-            background: linear-gradient(45deg, #667eea, #764ba2);
+            background: linear-gradient(45deg, #28a745, #20c997);
             color: white;
+            padding: 15px;
             border: none;
             border-radius: 10px;
             font-size: 18px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            margin-top: 20px;
+            margin: 20px 0;
+            display: none;
         }
 
         .analyze-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 10px 25px rgba(40, 167, 69, 0.4);
         }
 
         .analyze-btn:disabled {
             background: #ccc;
             cursor: not-allowed;
             transform: none;
-            box-shadow: none;
-        }
-
-        .progress-section {
-            margin: 30px 0;
-            display: none;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 20px;
-            background: #f0f0f0;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            width: 0%;
-            transition: width 0.3s ease;
-            border-radius: 10px;
-        }
-
-        .progress-text {
-            text-align: center;
-            margin-top: 10px;
-            font-weight: 600;
-            color: #333;
         }
 
         .results-section {
@@ -130,58 +178,113 @@
             display: none;
         }
 
-        .result-item {
-            background: rgba(255, 255, 255, 0.8);
-            border: 1px solid #e1e5e9;
+        .result-summary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .summary-stat {
+            display: inline-block;
+            margin: 0 20px;
+            padding: 10px;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .images-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .image-card {
+            background: white;
             border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 15px;
+            padding: 10px;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
         }
 
-        .result-url {
-            font-weight: 600;
-            color: #667eea;
-            margin-bottom: 10px;
-        }
-
-        .result-images {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
+        .image-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
         }
 
         .image-preview {
-            width: 100px;
-            height: 100px;
+            width: 100%;
+            height: 120px;
             object-fit: cover;
             border-radius: 8px;
-            border: 2px solid #e1e5e9;
-            cursor: pointer;
-            transition: all 0.3s ease;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 0.8em;
         }
 
-        .image-preview:hover {
-            transform: scale(1.05);
-            border-color: #667eea;
+        .image-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        .image-info {
+            padding: 8px 0;
+            text-align: center;
+        }
+
+        .image-name {
+            font-size: 0.8em;
+            color: #333;
+            font-weight: 500;
+            margin-bottom: 4px;
+            word-break: break-all;
+        }
+
+        .image-type {
+            font-size: 0.7em;
+            color: #666;
+            background: #e9ecef;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .download-section {
+            text-align: center;
+            margin-top: 30px;
         }
 
         .download-btn {
-            padding: 15px 30px;
-            background: #28a745;
+            background: linear-gradient(45deg, #fd7e14, #e83e8c);
             color: white;
+            padding: 15px 30px;
             border: none;
-            border-radius: 8px;
-            cursor: pointer;
+            border-radius: 10px;
+            font-size: 18px;
             font-weight: 600;
-            margin-top: 20px;
+            cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 16px;
         }
 
         .download-btn:hover {
-            background: #218838;
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(253, 126, 20, 0.4);
         }
 
         .download-btn:disabled {
@@ -190,22 +293,20 @@
             transform: none;
         }
 
-        .error-message {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 10px;
-            margin: 15px 0;
-            border: 1px solid #f5c6cb;
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
         }
 
-        .success-message {
-            background: #d4edda;
-            color: #155724;
-            padding: 15px;
-            border-radius: 10px;
-            margin: 15px 0;
-            border: 1px solid #c3e6cb;
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
         }
 
         .loader {
@@ -224,339 +325,304 @@
             100% { transform: rotate(360deg); }
         }
 
-        .debug-info {
-            background: #fff3cd;
-            color: #856404;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
-            font-size: 14px;
-            border: 1px solid #ffeaa7;
+        .message {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #b7d4ea;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🖼️ Extracteur d'Images</h1>
+        <h1>🖼️ Extracteur d'Images depuis Fichiers</h1>
         
-        <div class="input-section">
-            <label for="textInput">Collez votre texte contenant des liens :</label>
-            <textarea id="textInput" placeholder="Exemple: Visitez https://httpbin.org/html et https://example.com pour voir des images"></textarea>
-            <button class="analyze-btn" id="analyzeBtn">🔍 Analyser et Extraire les Images</button>
+        <div class="upload-section" id="uploadSection">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">
+                Glissez-déposez vos fichiers ici ou cliquez pour sélectionner
+                <br><small>Formats supportés : HTML, CSS, JS, JSON, XML, TXT, MD...</small>
+            </div>
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                📂 Sélectionner des fichiers
+            </button>
+            <input type="file" id="fileInput" class="file-input" multiple accept="*">
         </div>
 
-        <div class="progress-section" id="progressSection">
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
-            <div class="progress-text" id="progressText">Initialisation...</div>
+        <div class="file-list" id="fileList">
+            <h3>📋 Fichiers sélectionnés :</h3>
+            <div id="fileItems"></div>
+            <button class="analyze-btn" id="analyzeBtn">🔍 Analyser les fichiers</button>
         </div>
 
         <div class="results-section" id="resultsSection">
-            <h3>Résultats de l'analyse :</h3>
-            <div id="resultsContainer"></div>
-            <button class="download-btn" id="downloadBtn">📥 Télécharger toutes les images (ZIP)</button>
+            <div class="result-summary">
+                <div class="summary-stat">
+                    <span class="stat-number" id="totalFiles">0</span>
+                    <span class="stat-label">Fichiers analysés</span>
+                </div>
+                <div class="summary-stat">
+                    <span class="stat-number" id="totalImages">0</span>
+                    <span class="stat-label">Images trouvées</span>
+                </div>
+                <div class="summary-stat">
+                    <span class="stat-number" id="base64Count">0</span>
+                    <span class="stat-label">Base64</span>
+                </div>
+                <div class="summary-stat">
+                    <span class="stat-number" id="urlCount">0</span>
+                    <span class="stat-label">URLs</span>
+                </div>
+            </div>
+
+            <div class="images-grid" id="imagesGrid"></div>
+
+            <div class="download-section">
+                <button class="download-btn" id="downloadBtn">
+                    📦 Télécharger toutes les images (ZIP)
+                </button>
+            </div>
         </div>
     </div>
 
     <script>
-        console.log('Script chargé');
+        let selectedFiles = [];
+        let extractedImages = [];
+
+        // Gestion du drag & drop
+        const uploadSection = document.getElementById('uploadSection');
         
-        // Variables globales
-        let allImages = [];
-        let currentZip = null;
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
 
-        // Fonction pour extraire les liens
-        function extractLinks(text) {
-            console.log('Extraction des liens depuis:', text.substring(0, 100) + '...');
-            const urlRegex = /(https?:\/\/[^\s]+)/gi;
-            const matches = text.match(urlRegex) || [];
-            const uniqueLinks = [...new Set(matches)];
-            console.log('Liens trouvés:', uniqueLinks);
-            return uniqueLinks;
+        uploadSection.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+        });
+
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        // Gestion de la sélection de fichiers
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        // Fonction pour traiter les fichiers sélectionnés
+        function handleFiles(files) {
+            selectedFiles = Array.from(files);
+            displayFileList();
         }
 
-        // Fonction pour afficher les messages
-        function showMessage(message, type) {
-            const container = document.getElementById('resultsContainer');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = type === 'error' ? 'error-message' : 'success-message';
-            messageDiv.textContent = message;
-            
-            // Supprimer les anciens messages
-            const oldMessages = container.querySelectorAll('.error-message, .success-message, .debug-info');
-            oldMessages.forEach(msg => msg.remove());
-            
-            container.insertBefore(messageDiv, container.firstChild);
-        }
-
-        // Fonction pour afficher les informations de debug
-        function showDebug(message) {
-            const container = document.getElementById('resultsContainer');
-            const debugDiv = document.createElement('div');
-            debugDiv.className = 'debug-info';
-            debugDiv.textContent = '🔍 ' + message;
-            container.appendChild(debugDiv);
-        }
-
-        // Fonction pour mettre à jour la progression
-        function updateProgress(percentage, text) {
-            const progressFill = document.getElementById('progressFill');
-            const progressText = document.getElementById('progressText');
-            
-            progressFill.style.width = percentage + '%';
-            progressText.innerHTML = `<span class="loader"></span>${text}`;
-        }
-
-        // Fonction pour créer des images de démonstration
-        function createDemoImages(url) {
-            const hostname = new URL(url).hostname;
-            return [
-                {
-                    src: `https://via.placeholder.com/300x200/FF6B6B/FFFFFF?text=${encodeURIComponent(hostname + ' - Image 1')}`,
-                    type: 'url',
-                    name: `demo_${hostname}_1.png`
-                },
-                {
-                    src: `https://via.placeholder.com/200x300/4ECDC4/FFFFFF?text=${encodeURIComponent(hostname + ' - Image 2')}`,
-                    type: 'url', 
-                    name: `demo_${hostname}_2.png`
-                },
-                {
-                    src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAFYSURBVBiVY/z//z8DJQAggBhJVQwQQIxkKwYIIEZyFQMEECO5igECiJFcxQABxEiuYoAAYiRXMUAAMZKrGCCAGMlVDBBAjOQqBgggRnIVAwQQI7mKAQKIkVzFAAHESK5igABiJFcxQAAxkqsYIIAYyVUMEECM5CoGCCBGchUDBBAjuYoBAoiRXMUAAcRIrmKAAGIkVzFAADGSqxgggBjJVQwQQIzkKgYIIEZyFQMEECO5igECiJFcxQABxEiuYoAAYiRXMUAAMZKrGCCAGMlVDBBAjOQqBgggRnIVAwQQI7mKAQKIkVzFAAHESK5igABiJFcxQAAxkqsYIIAYyVUMEECM5CoGCCBGchUDBBAjuYoBAoiRXMUAAcRIrmKAAGIkVzFAADGSqxgggBjJVQwQQIzkKgYIIEZyFQMEECO5igECiJFcxQABxEiuYoAAYqQUAAQQAyUAIMAAeP8DGH8AAAAASUVORK5CYII=',
-                    type: 'base64',
-                    name: `demo_${hostname}_base64.png`
-                }
-            ];
-        }
-
-        // Fonction pour analyser un lien
-        async function analyzeLink(url, index, total) {
-            showDebug(`Analyse ${index + 1}/${total}: ${url}`);
-            
-            try {
-                // Créer des images de démonstration car l'accès aux sites externes est limité
-                const images = createDemoImages(url);
-                
-                allImages.push({
-                    url: url,
-                    images: images
-                });
-                
-                showDebug(`✅ ${images.length} images trouvées sur ${url}`);
-                
-            } catch (error) {
-                console.error(`Erreur pour ${url}:`, error);
-                showDebug(`❌ Erreur lors de l'analyse de ${url}`);
-                
-                // Ajouter quand même une entrée vide
-                allImages.push({
-                    url: url,
-                    images: []
-                });
-            }
-        }
-
-        // Fonction pour afficher les résultats
-        function displayResults() {
-            const resultsSection = document.getElementById('resultsSection');
-            const resultsContainer = document.getElementById('resultsContainer');
-            
-            resultsSection.style.display = 'block';
-            
-            // Supprimer les anciens résultats (sauf les messages)
-            const oldResults = resultsContainer.querySelectorAll('.result-item');
-            oldResults.forEach(item => item.remove());
-            
-            allImages.forEach(linkData => {
-                const resultItem = document.createElement('div');
-                resultItem.className = 'result-item';
-                
-                const urlDiv = document.createElement('div');
-                urlDiv.className = 'result-url';
-                urlDiv.textContent = `${linkData.url} (${linkData.images.length} image(s))`;
-                
-                const imagesDiv = document.createElement('div');
-                imagesDiv.className = 'result-images';
-                
-                if (linkData.images.length === 0) {
-                    const noImageText = document.createElement('div');
-                    noImageText.textContent = 'Aucune image trouvée';
-                    noImageText.style.color = '#666';
-                    noImageText.style.fontStyle = 'italic';
-                    imagesDiv.appendChild(noImageText);
-                } else {
-                    linkData.images.forEach((image, index) => {
-                        if (index < 5) {
-                            const img = document.createElement('img');
-                            img.className = 'image-preview';
-                            img.src = image.src;
-                            img.alt = image.name;
-                            img.title = image.name;
-                            
-                            img.onerror = () => {
-                                img.style.display = 'none';
-                            };
-                            
-                            imagesDiv.appendChild(img);
-                        }
-                    });
-                    
-                    if (linkData.images.length > 5) {
-                        const moreText = document.createElement('div');
-                        moreText.textContent = `... et ${linkData.images.length - 5} autre(s) image(s)`;
-                        moreText.style.color = '#666';
-                        moreText.style.fontStyle = 'italic';
-                        imagesDiv.appendChild(moreText);
-                    }
-                }
-                
-                resultItem.appendChild(urlDiv);
-                resultItem.appendChild(imagesDiv);
-                resultsContainer.appendChild(resultItem);
-            });
-            
-            const totalImages = allImages.reduce((sum, item) => sum + item.images.length, 0);
-            showMessage(`✅ Analyse terminée ! ${totalImages} image(s) trouvée(s) sur ${allImages.length} site(s).`, 'success');
-        }
-
-        // Fonction pour créer et télécharger le ZIP
-        async function createAndDownloadZip() {
-            const downloadBtn = document.getElementById('downloadBtn');
-            downloadBtn.disabled = true;
-            downloadBtn.innerHTML = '<span class="loader"></span>Création du ZIP...';
-            
-            try {
-                const zip = new JSZip();
-                let imageCounter = 1;
-                
-                for (const linkData of allImages) {
-                    const folderName = new URL(linkData.url).hostname.replace(/[^a-z0-9]/gi, '_');
-                    
-                    for (const image of linkData.images) {
-                        try {
-                            if (image.type === 'base64') {
-                                const base64Data = image.src.split(',')[1];
-                                zip.file(`${folderName}/${image.name}`, base64Data, {base64: true});
-                            } else {
-                                // Pour les URLs, on simule le contenu (car les images externes peuvent ne pas être accessibles)
-                                const demoContent = `Image de ${image.src}`;
-                                zip.file(`${folderName}/${image.name}`, demoContent);
-                            }
-                        } catch (error) {
-                            console.error('Erreur lors de l\'ajout d\'une image:', error);
-                        }
-                    }
-                }
-                
-                // Ajouter un fichier de résumé
-                const summary = `Résumé de l'extraction d'images
-=====================================
-
-Total de sites analysés: ${allImages.length}
-Total d'images trouvées: ${allImages.reduce((sum, item) => sum + item.images.length, 0)}
-
-Détails par site:
-${allImages.map(item => `- ${item.url}: ${item.images.length} image(s)`).join('\n')}
-
-Date d'extraction: ${new Date().toLocaleString('fr-FR')}
-`;
-                zip.file('RESUME.txt', summary);
-                
-                const content = await zip.generateAsync({type: 'blob'});
-                
-                // Créer le lien de téléchargement
-                const url = window.URL.createObjectURL(content);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `images_extraites_${new Date().getTime()}.zip`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-                
-                showMessage('🎉 Fichier ZIP téléchargé avec succès !', 'success');
-                
-            } catch (error) {
-                console.error('Erreur lors de la création du ZIP:', error);
-                showMessage('❌ Erreur lors de la création du fichier ZIP.', 'error');
-            }
-            
-            downloadBtn.disabled = false;
-            downloadBtn.innerHTML = '📥 Télécharger toutes les images (ZIP)';
-        }
-
-        // Fonction principale d'analyse
-        async function startAnalysis() {
-            console.log('Début de l\'analyse');
-            
-            const textInput = document.getElementById('textInput');
+        // Afficher la liste des fichiers
+        function displayFileList() {
+            const fileList = document.getElementById('fileList');
+            const fileItems = document.getElementById('fileItems');
             const analyzeBtn = document.getElementById('analyzeBtn');
-            const progressSection = document.getElementById('progressSection');
-            
-            const text = textInput.value.trim();
-            if (!text) {
-                showMessage('⚠️ Veuillez entrer du texte contenant des liens.', 'error');
+
+            if (selectedFiles.length === 0) {
+                fileList.style.display = 'none';
                 return;
             }
-            
-            // Extraire les liens
-            const links = extractLinks(text);
-            if (links.length === 0) {
-                showMessage('⚠️ Aucun lien trouvé dans le texte. Assurez-vous d\'inclure des URLs complètes (http:// ou https://).', 'error');
-                return;
-            }
-            
-            // Réinitialiser
-            allImages = [];
-            const resultsContainer = document.getElementById('resultsContainer');
-            resultsContainer.innerHTML = '';
-            
-            // Afficher la progression
+
+            fileList.style.display = 'block';
+            fileItems.innerHTML = '';
+
+            selectedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                
+                fileItem.innerHTML = `
+                    <div class="file-info">
+                        <div class="file-name">📄 ${file.name}</div>
+                        <div class="file-size">${formatFileSize(file.size)}</div>
+                    </div>
+                    <div class="file-status status-pending" id="status-${index}">En attente</div>
+                `;
+                
+                fileItems.appendChild(fileItem);
+            });
+
+            analyzeBtn.style.display = 'block';
+        }
+
+        // Formater la taille des fichiers
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Analyser les fichiers
+        document.getElementById('analyzeBtn').addEventListener('click', async () => {
+            const analyzeBtn = document.getElementById('analyzeBtn');
             analyzeBtn.disabled = true;
-            progressSection.style.display = 'block';
+            analyzeBtn.innerHTML = '<span class="loader"></span>Analyse en cours...';
+
+            extractedImages = [];
             
-            showDebug(`🔍 ${links.length} lien(s) détecté(s) pour analyse`);
-            
-            // Analyser chaque lien
-            for (let i = 0; i < links.length; i++) {
-                const percentage = ((i + 1) / links.length) * 100;
-                updateProgress(percentage, `Analyse ${i + 1}/${links.length}: ${links[i].substring(0, 50)}...`);
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                const statusElement = document.getElementById(`status-${i}`);
                 
-                await analyzeLink(links[i], i, links.length);
-                
-                // Petite pause pour la fluidité
-                await new Promise(resolve => setTimeout(resolve, 500));
+                try {
+                    statusElement.textContent = 'Traitement...';
+                    statusElement.className = 'file-status status-processing';
+                    
+                    const images = await extractImagesFromFile(file);
+                    extractedImages.push(...images);
+                    
+                    statusElement.textContent = `${images.length} image(s) trouvée(s)`;
+                    statusElement.className = 'file-status status-completed';
+                    
+                } catch (error) {
+                    console.error(`Erreur lors du traitement de ${file.name}:`, error);
+                    statusElement.textContent = 'Erreur';
+                    statusElement.className = 'file-status status-error';
+                }
             }
-            
-            // Masquer la progression et afficher les résultats
-            progressSection.style.display = 'none';
+
             analyzeBtn.disabled = false;
+            analyzeBtn.innerHTML = '🔍 Analyser les fichiers';
             
             displayResults();
+        });
+
+        // Extraire les images d'un fichier
+        async function extractImagesFromFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                
+                reader.onload = (e) => {
+                    try {
+                        const content = e.target.result;
+                        const images = findImagesInContent(content, file.name);
+                        resolve(images);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                
+                reader.onerror = () => reject(new Error('Erreur de lecture du fichier'));
+                reader.readAsText(file);
+            });
         }
 
-        // Initialisation quand la page est chargée
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('Page chargée, initialisation...');
+        // Trouver les images dans le contenu
+        function findImagesInContent(content, fileName) {
+            const images = [];
+            let imageCounter = 1;
+
+            // Chercher les images en base64
+            const base64Regex = /data:image\/([a-zA-Z]*);base64,([^"'\s<>]*)/g;
+            let base64Match;
             
-            const analyzeBtn = document.getElementById('analyzeBtn');
-            const downloadBtn = document.getElementById('downloadBtn');
-            
-            if (!analyzeBtn || !downloadBtn) {
-                console.error('Boutons non trouvés !');
+            while ((base64Match = base64Regex.exec(content)) !== null) {
+                const format = base64Match[1] || 'png';
+                images.push({
+                    src: base64Match[0],
+                    type: 'base64',
+                    format: format,
+                    name: `${fileName}_base64_${imageCounter}.${format}`,
+                    sourceFile: fileName
+                });
+                imageCounter++;
+            }
+
+            // Chercher les URLs d'images
+            const urlPatterns = [
+                /src\s*=\s*["']([^"']*\.(?:jpg|jpeg|png|gif|bmp|webp|svg))[^"']*/gi,
+                /background(?:-image)?\s*:\s*url\(["']?([^"')]*\.(?:jpg|jpeg|png|gif|bmp|webp|svg))[^"')]*/gi,
+                /https?:\/\/[^\s<>"']*\.(?:jpg|jpeg|png|gif|bmp|webp|svg)/gi
+            ];
+
+            urlPatterns.forEach(regex => {
+                let urlMatch;
+                while ((urlMatch = regex.exec(content)) !== null) {
+                    const url = urlMatch[1] || urlMatch[0];
+                    if (url && !images.find(img => img.src === url)) {
+                        const extension = url.split('.').pop().toLowerCase();
+                        images.push({
+                            src: url,
+                            type: 'url',
+                            format: extension,
+                            name: `${fileName}_url_${imageCounter}.${extension}`,
+                            sourceFile: fileName
+                        });
+                        imageCounter++;
+                    }
+                }
+            });
+
+            return images;
+        }
+
+        // Afficher les résultats
+        function displayResults() {
+            const resultsSection = document.getElementById('resultsSection');
+            resultsSection.style.display = 'block';
+
+            // Mettre à jour les statistiques
+            document.getElementById('totalFiles').textContent = selectedFiles.length;
+            document.getElementById('totalImages').textContent = extractedImages.length;
+            document.getElementById('base64Count').textContent = extractedImages.filter(img => img.type === 'base64').length;
+            document.getElementById('urlCount').textContent = extractedImages.filter(img => img.type === 'url').length;
+
+            // Afficher la grille d'images
+            const imagesGrid = document.getElementById('imagesGrid');
+            imagesGrid.innerHTML = '';
+
+            if (extractedImages.length === 0) {
+                imagesGrid.innerHTML = '<div class="message info">Aucune image trouvée dans les fichiers analysés.</div>';
                 return;
             }
-            
-            analyzeBtn.addEventListener('click', startAnalysis);
-            downloadBtn.addEventListener('click', createAndDownloadZip);
-            
-            console.log('Event listeners ajoutés');
-            
-            // Ajouter un exemple dans le textarea
-            const textInput = document.getElementById('textInput');
-            textInput.value = 'Voici quelques sites à analyser:\nhttps://httpbin.org/html\nhttps://example.com\nhttps://jsonplaceholder.typicode.com';
-        });
-    </script>
-</body>
-</html>
+
+            extractedImages.forEach((image, index) => {
+                const imageCard = document.createElement('div');
+                imageCard.className = 'image-card';
+                
+                const previewHtml = image.type === 'base64' 
+                    ? `<img src="${image.src}" alt="${image.name}" onerror="this.parentElement.innerHTML='❌ Erreur'">`
+                    : `<div>🔗 ${image.format.toUpperCase()}</div>`;
+                
+                imageCard.innerHTML = `
+                    <div class="image-preview">${previewHtml}</div>
+                    <div class="image-info">
+                        <div class="image-name">${image.name}</div>
+                        <div class="image-type">${image.type === 'base64' ? '🔢 Base64' : '🔗 URL'}</div>
+                    </div>
+                `;
+                
+                imagesGrid.appendChild(imageCard);
+            });
+        }
+
+        // Télécharger le ZIP
+        document.getElementById('downloadBtn').addEventListener('click', async () => {
+            const downloadBtn = document.getElementById('downloadBtn');
+            downloadB
