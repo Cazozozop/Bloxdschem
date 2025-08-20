@@ -48,12 +48,18 @@
             margin-bottom: 30px;
             background: rgba(102, 126, 234, 0.05);
             transition: all 0.3s ease;
+            cursor: pointer;
         }
 
         .upload-section.dragover {
             border-color: #764ba2;
             background: rgba(118, 75, 162, 0.1);
             transform: scale(1.02);
+        }
+
+        .upload-section.uploading {
+            border-color: #28a745;
+            background: rgba(40, 167, 69, 0.1);
         }
 
         .upload-icon {
@@ -293,13 +299,26 @@
             transform: none;
         }
 
+        .progress-section {
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-info {
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+
         .progress-bar {
             width: 100%;
-            height: 8px;
+            height: 20px;
             background: #e9ecef;
-            border-radius: 4px;
+            border-radius: 10px;
             overflow: hidden;
             margin: 10px 0;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .progress-fill {
@@ -307,6 +326,33 @@
             background: linear-gradient(45deg, #667eea, #764ba2);
             width: 0%;
             transition: width 0.3s ease;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .upload-progress {
+            background: linear-gradient(45deg, #28a745, #20c997) !important;
+        }
+
+        .analysis-progress {
+            background: linear-gradient(45deg, #fd7e14, #e83e8c) !important;
         }
 
         .loader {
@@ -355,16 +401,23 @@
     <div class="container">
         <h1>🖼️ Extracteur d'Images depuis Fichiers</h1>
         
-        <div class="upload-section" id="uploadSection">
+        <div class="upload-section" id="uploadSection" onclick="document.getElementById('fileInput').click()">
             <div class="upload-icon">📁</div>
-            <div class="upload-text">
+            <div class="upload-text" id="uploadText">
                 Glissez-déposez vos fichiers ici ou cliquez pour sélectionner
                 <br><small>Formats supportés : HTML, CSS, JS, JSON, XML, TXT, MD...</small>
             </div>
-            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+            <button class="upload-btn" onclick="event.stopPropagation(); document.getElementById('fileInput').click()">
                 📂 Sélectionner des fichiers
             </button>
-            <input type="file" id="fileInput" class="file-input" multiple accept="*">
+            <input type="file" id="fileInput" class="file-input" multiple>
+        </div>
+
+        <div class="progress-section" id="progressSection">
+            <div class="progress-info" id="progressInfo">Chargement...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
         </div>
 
         <div class="file-list" id="fileList">
@@ -407,34 +460,141 @@
         let selectedFiles = [];
         let extractedImages = [];
 
-        // Gestion du drag & drop
+        // Gestion du drag & drop et des clics
         const uploadSection = document.getElementById('uploadSection');
         
-        uploadSection.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadSection.classList.add('dragover');
+        // Empêcher les comportements par défaut pour tout le document
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.addEventListener(eventName, preventDefaults, false);
+            uploadSection.addEventListener(eventName, preventDefaults, false);
         });
 
-        uploadSection.addEventListener('dragleave', (e) => {
+        function preventDefaults(e) {
             e.preventDefault();
-            uploadSection.classList.remove('dragover');
+            e.stopPropagation();
+        }
+
+        // Gérer les effets visuels
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadSection.addEventListener(eventName, () => {
+                uploadSection.classList.add('dragover');
+            });
         });
 
-        uploadSection.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadSection.classList.remove('dragover');
-            handleFiles(e.dataTransfer.files);
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadSection.addEventListener(eventName, () => {
+                uploadSection.classList.remove('dragover');
+            });
+        });
+
+        // Gérer le drop
+        uploadSection.addEventListener('drop', async (e) => {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                await handleFiles(files);
+            }
         });
 
         // Gestion de la sélection de fichiers
-        document.getElementById('fileInput').addEventListener('change', (e) => {
-            handleFiles(e.target.files);
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            if (e.target.files.length > 0) {
+                await handleFiles(e.target.files);
+            }
         });
 
         // Fonction pour traiter les fichiers sélectionnés
-        function handleFiles(files) {
-            selectedFiles = Array.from(files);
+        async function handleFiles(files) {
+            console.log('Fichiers sélectionnés:', files.length);
+            const fileArray = Array.from(files);
+            
+            // Afficher la progression d'upload
+            showProgress('upload', 'Chargement des fichiers...', 0);
+            
+            selectedFiles = [];
+            
+            // Simuler le chargement progressif des fichiers
+            for (let i = 0; i < fileArray.length; i++) {
+                const file = fileArray[i];
+                
+                // Vérifier que le fichier est lisible
+                try {
+                    await validateFile(file);
+                    selectedFiles.push(file);
+                    
+                    const progress = ((i + 1) / fileArray.length) * 100;
+                    updateProgress(progress, `Chargement: ${file.name} (${i + 1}/${fileArray.length})`);
+                    
+                    // Petite pause pour voir la progression
+                    await sleep(200);
+                } catch (error) {
+                    console.error(`Erreur avec le fichier ${file.name}:`, error);
+                    showMessage(`Erreur avec le fichier: ${file.name}`, 'error');
+                }
+            }
+            
+            hideProgress();
             displayFileList();
+        }
+
+        // Valider qu'un fichier peut être lu
+        function validateFile(file) {
+            return new Promise((resolve, reject) => {
+                // Vérifier la taille (max 10MB)
+                if (file.size > 10 * 1024 * 1024) {
+                    reject(new Error('Fichier trop volumineux (max 10MB)'));
+                    return;
+                }
+                
+                // Essayer de lire un échantillon du fichier
+                const reader = new FileReader();
+                reader.onload = () => resolve();
+                reader.onerror = () => reject(new Error('Impossible de lire le fichier'));
+                
+                // Lire juste les premiers 1024 caractères pour valider
+                const sample = file.slice(0, 1024);
+                reader.readAsText(sample);
+            });
+        }
+
+        // Fonctions pour gérer la progression
+        function showProgress(type, text, percentage) {
+            const progressSection = document.getElementById('progressSection');
+            const progressFill = document.getElementById('progressFill');
+            const progressInfo = document.getElementById('progressInfo');
+            
+            progressSection.style.display = 'block';
+            
+            // Changer le style selon le type
+            progressFill.className = 'progress-fill';
+            if (type === 'upload') {
+                progressFill.classList.add('upload-progress');
+                document.getElementById('uploadSection').classList.add('uploading');
+            } else if (type === 'analysis') {
+                progressFill.classList.add('analysis-progress');
+            }
+            
+            updateProgress(percentage, text);
+        }
+
+        function updateProgress(percentage, text) {
+            const progressFill = document.getElementById('progressFill');
+            const progressInfo = document.getElementById('progressInfo');
+            
+            progressFill.style.width = Math.min(100, Math.max(0, percentage)) + '%';
+            progressInfo.innerHTML = `<span class="loader"></span>${text}`;
+        }
+
+        function hideProgress() {
+            const progressSection = document.getElementById('progressSection');
+            const uploadSection = document.getElementById('uploadSection');
+            
+            progressSection.style.display = 'none';
+            uploadSection.classList.remove('uploading');
+        }
+
+        // Fonction utilitaire pour les pauses
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
         }
 
         // Afficher la liste des fichiers
@@ -460,13 +620,21 @@
                         <div class="file-name">📄 ${file.name}</div>
                         <div class="file-size">${formatFileSize(file.size)}</div>
                     </div>
-                    <div class="file-status status-pending" id="status-${index}">En attente</div>
+                    <div class="file-status status-pending" id="status-${index}">✅ Prêt</div>
                 `;
                 
                 fileItems.appendChild(fileItem);
             });
 
             analyzeBtn.style.display = 'block';
+            
+            // Mettre à jour le texte d'upload
+            document.getElementById('uploadText').innerHTML = `
+                ✅ ${selectedFiles.length} fichier(s) chargé(s)
+                <br><small>Cliquez pour ajouter d'autres fichiers ou analysez ceux-ci</small>
+            `;
+
+            showMessage(`${selectedFiles.length} fichier(s) chargé(s) avec succès !`, 'success');
         }
 
         // Formater la taille des fichiers
@@ -484,6 +652,9 @@
             analyzeBtn.disabled = true;
             analyzeBtn.innerHTML = '<span class="loader"></span>Analyse en cours...';
 
+            // Afficher la progression d'analyse
+            showProgress('analysis', 'Initialisation de l\'analyse...', 0);
+
             extractedImages = [];
             
             for (let i = 0; i < selectedFiles.length; i++) {
@@ -494,11 +665,17 @@
                     statusElement.textContent = 'Traitement...';
                     statusElement.className = 'file-status status-processing';
                     
+                    const progress = (i / selectedFiles.length) * 100;
+                    updateProgress(progress, `Analyse: ${file.name} (${i + 1}/${selectedFiles.length})`);
+                    
                     const images = await extractImagesFromFile(file);
                     extractedImages.push(...images);
                     
                     statusElement.textContent = `${images.length} image(s) trouvée(s)`;
                     statusElement.className = 'file-status status-completed';
+                    
+                    // Pause pour voir la progression
+                    await sleep(300);
                     
                 } catch (error) {
                     console.error(`Erreur lors du traitement de ${file.name}:`, error);
@@ -507,6 +684,11 @@
                 }
             }
 
+            // Finalisation
+            updateProgress(100, 'Finalisation des résultats...');
+            await sleep(500);
+
+            hideProgress();
             analyzeBtn.disabled = false;
             analyzeBtn.innerHTML = '🔍 Analyser les fichiers';
             
@@ -625,4 +807,101 @@
         // Télécharger le ZIP
         document.getElementById('downloadBtn').addEventListener('click', async () => {
             const downloadBtn = document.getElementById('downloadBtn');
-            downloadB
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = '<span class="loader"></span>Création du ZIP...';
+
+            try {
+                const zip = new JSZip();
+                
+                // Créer des dossiers par type
+                const base64Folder = zip.folder('images_base64');
+                const urlsFolder = zip.folder('images_urls');
+                
+                // Ajouter les images base64
+                extractedImages.filter(img => img.type === 'base64').forEach(image => {
+                    try {
+                        const base64Data = image.src.split(',')[1];
+                        if (base64Data) {
+                            base64Folder.file(image.name, base64Data, {base64: true});
+                        }
+                    } catch (error) {
+                        console.error('Erreur lors de l\'ajout de l\'image base64:', error);
+                    }
+                });
+
+                // Créer un fichier avec les URLs
+                const urlsList = extractedImages
+                    .filter(img => img.type === 'url')
+                    .map(img => `${img.name}: ${img.src}`)
+                    .join('\n');
+                
+                if (urlsList) {
+                    urlsFolder.file('urls_images.txt', urlsList);
+                }
+
+                // Créer un fichier de résumé
+                const summary = `RÉSUMÉ DE L'EXTRACTION D'IMAGES
+=====================================
+
+Date: ${new Date().toLocaleString('fr-FR')}
+Fichiers analysés: ${selectedFiles.length}
+Images trouvées: ${extractedImages.length}
+
+Répartition:
+- Images Base64: ${extractedImages.filter(img => img.type === 'base64').length}
+- URLs d'images: ${extractedImages.filter(img => img.type === 'url').length}
+
+DÉTAILS PAR FICHIER:
+${selectedFiles.map(file => {
+    const fileImages = extractedImages.filter(img => img.sourceFile === file.name);
+    return `📄 ${file.name} (${formatFileSize(file.size)}): ${fileImages.length} image(s)`;
+}).join('\n')}
+
+TOUTES LES IMAGES TROUVÉES:
+${extractedImages.map(img => `- ${img.name} [${img.type}] depuis ${img.sourceFile}`).join('\n')}
+`;
+
+                zip.file('RÉSUMÉ.txt', summary);
+
+                // Générer et télécharger le ZIP
+                const content = await zip.generateAsync({type: 'blob'});
+                const url = window.URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `images_extraites_${new Date().getTime()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                showMessage('🎉 ZIP téléchargé avec succès !', 'success');
+
+            } catch (error) {
+                console.error('Erreur lors de la création du ZIP:', error);
+                showMessage('❌ Erreur lors de la création du ZIP', 'error');
+            }
+
+            downloadBtn.disabled = false;
+            downloadBtn.innerHTML = '📦 Télécharger toutes les images (ZIP)';
+        });
+
+        // Afficher un message
+        function showMessage(text, type) {
+            const existing = document.querySelector('.message');
+            if (existing) existing.remove();
+
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+            message.textContent = text;
+            
+            document.querySelector('.download-section').appendChild(message);
+            
+            setTimeout(() => {
+                if (message.parentNode) {
+                    message.remove();
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
